@@ -6,6 +6,10 @@ import urllib
 GOOGLE_JSON_AMVS = 'http://ajax.googleapis.com/ajax/services/search/web'\
     '?v=1.0&rsz=large&q="site:animemusicvideos.org"+video+information+%s'
 
+AMV_INFO_URL = 'http://www.animemusicvideos.org/popups/vid_info.php?v=%s'
+AMV_FULL_URL = 'http://www.animemusicvideos.org/members/'\
+    'members_videoinfo.php?v=%s'
+
 
 def Start():
     pass
@@ -30,8 +34,8 @@ class AMVAgent(Agent.Movies):
         for result in google_results:
             url = result['url']
             vid = None
-            if url.startswith('http://www.animemusicvideos.org'
-                              '/members/members_videoinfo.php'):
+            # members_videoinfo.php or download.php
+            if url.startswith('http://www.animemusicvideos.org/members/'):
                 try:
                     params = url.split('%3F', 2)[1].split('%26')
                     for param in params:
@@ -57,7 +61,6 @@ class AMVAgent(Agent.Movies):
                 title = match.group(1)
             except:
                 pass
-            Log([title, match.groups() if match else None])
             results.Append(MetadataSearchResult(
                 id=str(vid),
                 name=title,
@@ -68,4 +71,76 @@ class AMVAgent(Agent.Movies):
             ))
 
     def update(self, metadata, media, lang):
-        pass
+        if not metadata.id:
+            return
+        """try:
+            info_html = HTML.ElementFromURL(AMV_INFO_URL % metadata.id)
+            info_html = info_html.cssselect('#info2')[0]
+        except:
+            Log('Could not pull info for %s' % metadata.id)
+        Log(info_html.text_content())"""
+        try:
+            info_html = HTML.ElementFromURL(AMV_FULL_URL % metadata.id)
+            info_html = info_html.cssselect('#main')[0]
+        except:
+            Log('Could not pull info for %s' % metadata.id)
+            return
+
+        # .videoTitle
+        metadata.title = info_html.cssselect(
+            '.videoTitle')[0].text_content()
+
+        # videoPremiere
+        metadata.originally_available_at = Datetime.ParseDate(
+            info_html.cssselect('.videoPremiere')[0].text_content()).date()
+        metadata.year = metadata.originally_available_at.year
+
+        # videoStudio
+        try:
+            metadata.studio = info_html.cssselect(
+                '.videoStudio')[0].text_content()
+        except:
+            pass
+
+        # Summary
+        try:
+            metadata.summary = info_html.cssselect(
+                '.comments')[0].text_content()
+        except:
+            pass
+
+        # .opinionValues
+        if 0:  # TODO: opinionValues not available to non members?
+            metadata.content_rating = info_html.cssselect(
+                '.opinionValues li')[2].text_content()
+
+        try:
+            # Member
+            metadata.directors.clear()
+            metadata.directors.add(info_html.cssselect(
+                '#videoInformation ul li a')[0].text_content())
+        except:
+            pass
+
+        # videoCategory
+        metadata.genres.clear()
+        for cat in info_html.cssselect('.videoCategory li'):
+            metadata.genres.add(cat.text_content().strip())
+
+        # Posters (images from first comment)
+        valid_urls = []
+        try:
+            post = info_html.cssselect('.comments')[0]
+        except:
+            pass
+        else:
+            for i, img in enumerate(post.cssselect('img')):
+                url = img.get('src')
+                valid_urls.append(url)
+                if url not in metadata.posters:
+                    try:
+                        metadata.posters[url] = Proxy.Preview(
+                            HTTP.Request(url).content, sort_order=i)
+                    except:
+                        pass
+            metadata.posters.validate_keys(valid_urls)
