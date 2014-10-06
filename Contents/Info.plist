@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>solutions.alphaservcomputing.plex.agents.amvscanner</string>
+	<key>PlexAgentAttributionText</key>
+	<string>
+		&lt;a href=&quot;http://animemusicvideos.org&quot;&gt;AnimeMusicVideos.Org&lt;/a&gt; is a community-driven database of Anime Music Videos (AMVs). &lt;br/&gt;
+		This scanner helps to provide helpful information about the AMVs that you have.
+	</string>
+	<key>PlexFrameworkVersion</key>
+	<string>2</string>
+	<key>PlexPluginClass</key>
+	<string>Agent</string>
+	<key>PlexPluginCodePolicy</key>
+	<string>Elevated</string>
+</dict>
+</plist>
