@@ -24,8 +24,8 @@ class SearchError(RuntimeError):
 
 class Search(object):
     def __init__(self, query):
-        self.results = []
         self.total = 0
+        self.results = []  # List of (name, vid, year=None, creator=None) sets
         query = urllib.quote_plus(query)
         self.query = query
         try:
@@ -111,10 +111,6 @@ class Search(object):
             creator = result.cssselect('.creator')[0].text_content()
             self.results.append((name, vid, year, creator))
 
-    def __iter__(self):
-        """List of (name, vid, year=None, creator=None) sets"""
-        return self.results
-
 
 class AMVAgent(Agent.Movies):
     name = 'Anime Music Videos'
@@ -126,50 +122,21 @@ class AMVAgent(Agent.Movies):
             sanitized_name = sanitized_name[3:]
         sanitized_name = sanitized_name.replace('-', ' ')
         sanitized_name = sanitized_name.strip()
-        try:
-            safe_name = urllib.quote_plus(sanitized_name)
-            google_results = JSON.ObjectFromURL(GOOGLE_JSON_AMVS % safe_name,
-                                                sleep=2.0,
-                                                cache_time=86400*30)[
-                                                    'responseData']['results']
-        except:
-            return None
-        for result in google_results:
-            url = result['url']
-            vid = None
-            # members_videoinfo.php or download.php
-            if url.startswith('http://www.animemusicvideos.org/members/'):
-                try:
-                    params = url.split('%3F', 2)[1].split('%26')
-                    for param in params:
-                        key, value = param.split('%3D')
-                        if key == 'v':
-                            vid = int(value)
-                except:
-                    continue
-            elif url.startswith('http://www.animemusicvideos.org'
-                                '/video/'):
-                try:
-                    vid = int(url.split('/')[-1])
-                except:
-                    continue
-            if vid is None:
-                continue
-            try:
-                title = result['titleNoFormatting'].split('Information: ')[1]
-            except:
-                title = result['titleNoFormatting']
-            match = re.match(r'.+Video Information: (.*?)(?: - AnimeMusicVideos.org)?$', result['titleNoFormatting'])
-            try:
-                title = match.group(1)
-            except:
-                pass
+        sanitized_matcher = re.sub(r'[\W]', '', sanitized_name)
+        for result in Search(sanitized_name).results:
+            title, vid, year, creator = result
+            sanitized_title = re.sub(r'[\W]', '', title.lower())
+            score = 100-Util.LevenshteinDistance(sanitized_title,
+                                                 sanitized_name)
+            if creator and len(creator) > 4:
+                sanitized_creator = re.sub(r'[\W]', '', creator.lower())
+                if creator in sanitized_matcher:
+                    score += len(creator)
             results.Append(MetadataSearchResult(
                 id=str(vid),
                 name=title,
-                year=None,
-                score=100-Util.LevenshteinDistance(title.lower(),
-                                                   sanitized_name),
+                year=year,
+                score=score,
                 lang=lang
             ))
 
