@@ -6,6 +6,9 @@ import urllib
 GOOGLE_JSON_AMVS = 'http://ajax.googleapis.com/ajax/services/search/web'\
     '?v=1.0&rsz=large&q="site:animemusicvideos.org"+video+information+%s'
 
+AMV_SEARCH_URL = 'http://www.animemusicvideos.org/search/quick.php?'\
+    'criteria=%s&search=Search&go=go'
+
 AMV_INFO_URL = 'http://www.animemusicvideos.org/popups/vid_info.php?v=%s'
 AMV_FULL_URL = 'http://www.animemusicvideos.org/members/'\
     'members_videoinfo.php?v=%s'
@@ -13,6 +16,104 @@ AMV_FULL_URL = 'http://www.animemusicvideos.org/members/'\
 
 def Start():
     pass
+
+
+class SearchError(RuntimeError):
+    pass
+
+
+class Search(object):
+    def __init__(self, query):
+        self.results = []
+        self.total = 0
+        query = urllib.quote_plus(query)
+        self.query = query
+        try:
+            self.amvorg(query)
+        except:
+            pass
+        if not self.results or self.total > 100:
+            try:
+                self.google(query)
+            except:
+                pass
+
+    def google(self, query):
+        response = JSON.ObjectFromURL(GOOGLE_JSON_AMVS % query,
+                                      sleep=2.0,
+                                      cacheTime=86400*30)
+        if response['responseStatus'] != 200:
+            Log('Google failed to find results')
+            raise SearchError('Google did not return successful code')
+        for result in response['responseData']['results']:
+            url = result['url']
+            vid = None
+            # members_videoinfo.php or download.php
+            if url.startswith('http://www.animemusicvideos.org/members/'):
+                try:
+                    params = url.split('%3F', 2)[1].split('%26')
+                    for param in params:
+                        key, value = param.split('%3D')
+                        if key == 'v':
+                            vid = int(value)
+                except:
+                    continue
+            elif url.startswith('http://www.animemusicvideos.org'
+                                '/video/'):
+                try:
+                    vid = int(url.split('/')[-1])
+                except:
+                    continue
+            if vid is None:
+                continue
+            try:
+                title = result['titleNoFormatting'].split('Information: ')[1]
+            except:
+                title = result['titleNoFormatting']
+            match = re.match(r'.+Video Information: (.*?)(?: - AnimeMusicVideos.org)?$', result['titleNoFormatting'])
+            try:
+                title = match.group(1)
+            except:
+                pass
+            content = result['content'].replace('\\n', '')
+            year = None
+            try:
+                year = re.search(r'Premiered: ([0-9]+)-[0-9]+-[0-9]+;',
+                                 content).group(1)
+            except:
+                pass
+            creator = None
+            try:
+                creator = re.search(r'Member: .*?;', content).group(1)
+            except:
+                pass
+            self.results.append((title, vid, year, None))
+
+    def amvorg(self, query):
+        try:
+            search_html = HTML.ElementFromURL(AMV_SEARCH_URL % query,
+                                              cacheTime=86400*15)
+            search_html = search_html.cssselect('#searchResults')[0]
+            self.total = int(search_html.cssselect('.resultsTotal')[0]
+                             .text_content())
+            if self.total == 0:
+                raise SearchError('0 results')
+        except:
+            Log('AMVs.org failed to find results')
+            raise SearchError('AMVs.org failed to find results')
+        for result in search_html.cssselect('.resultsList .video'):
+            title = result.cssselect('.title')[0]
+            name = title.text_content()
+            vid = re.match(r'.*?([0-9]+)$', title.get('href')).group(1)
+            year = re.match(r'\(([0-9]+)-[0-9]+-[0-9]+\)',
+                            result.cssselect('.premiereDate')[0]
+                            .text_content()).group(1)
+            creator = result.cssselect('.creator')[0].text_content()
+            self.results.append((name, vid, year, creator))
+
+    def __iter__(self):
+        """List of (name, vid, year=None, creator=None) sets"""
+        return self.results
 
 
 class AMVAgent(Agent.Movies):
@@ -27,8 +128,10 @@ class AMVAgent(Agent.Movies):
         sanitized_name = sanitized_name.strip()
         try:
             safe_name = urllib.quote_plus(sanitized_name)
-            google_results = JSON.ObjectFromURL(GOOGLE_JSON_AMVS % safe_name)[
-                'responseData']['results']
+            google_results = JSON.ObjectFromURL(GOOGLE_JSON_AMVS % safe_name,
+                                                sleep=2.0,
+                                                cache_time=86400*30)[
+                                                    'responseData']['results']
         except:
             return None
         for result in google_results:
@@ -80,7 +183,8 @@ class AMVAgent(Agent.Movies):
             Log('Could not pull info for %s' % metadata.id)
         Log(info_html.text_content())"""
         try:
-            info_html = HTML.ElementFromURL(AMV_FULL_URL % metadata.id)
+            info_html = HTML.ElementFromURL(AMV_FULL_URL % metadata.id,
+                                            cacheTime=86400*15)
             info_html = info_html.cssselect('#main')[0]
         except:
             Log('Could not pull info for %s' % metadata.id)
