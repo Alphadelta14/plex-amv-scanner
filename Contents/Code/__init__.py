@@ -1,3 +1,5 @@
+"""AMV Scanner for Plex via animemusicvideos.org
+"""
 
 import re
 import urllib
@@ -23,6 +25,14 @@ class SearchError(RuntimeError):
 
 
 class Search(object):
+    """Search class for search engine execution
+
+    This queries animemusicvideos.org first before running against Google
+    for more complicated queries
+
+    Results are stored in `results`
+
+    """
     def __init__(self, query):
         self.total = 0
         self.results = []  # List of (name, vid, year=None, creator=None) sets
@@ -39,6 +49,7 @@ class Search(object):
                 pass
 
     def google(self, query):
+        """Run query against Google"""
         response = JSON.ObjectFromURL(GOOGLE_JSON_AMVS % query,
                                       sleep=2.0,
                                       cacheTime=86400*30)
@@ -90,6 +101,7 @@ class Search(object):
             self.results.append((title, vid, year, None))
 
     def amvorg(self, query):
+        """Run query against animemusicvideos.org"""
         try:
             search_html = HTML.ElementFromURL(AMV_SEARCH_URL % query,
                                               cacheTime=86400*15)
@@ -113,6 +125,7 @@ class Search(object):
 
 
 class AMVAgent(Agent.Movies):
+    """Anime Music Video Scanner"""
     name = 'Anime Music Videos'
     languages = [Locale.Language.English]
 
@@ -143,12 +156,6 @@ class AMVAgent(Agent.Movies):
     def update(self, metadata, media, lang):
         if not metadata.id:
             return
-        """try:
-            info_html = HTML.ElementFromURL(AMV_INFO_URL % metadata.id)
-            info_html = info_html.cssselect('#info2')[0]
-        except:
-            Log('Could not pull info for %s' % metadata.id)
-        Log(info_html.text_content())"""
         try:
             info_html = HTML.ElementFromURL(AMV_FULL_URL % metadata.id,
                                             cacheTime=86400*15)
